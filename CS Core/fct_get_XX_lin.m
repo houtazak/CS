@@ -3,8 +3,11 @@ function [a_lh,b_lh,c_lh,d_lh] = fct_get_XX_lin(h_min,h_max,P,r_l,mu_l,K_lh_s,K_
 %  NAME:      fct_get_XX_lin.m
 %  WHAT:      Build and solve linear system (Eq.6)
 %  REQUIRED:  CSmodel toolbox 20200321
-%  AUTHORS:   20200321, F. Trillaud, J. Guo, L. Quéval (loic.queval@gmail.com) 
-%  COPYRIGHT: 2020, Loïc Quéval, BSD License (http://opensource.org/licenses/BSD-3-Clause)
+%  AUTHORS:   20200321, F. Trillaud, J. Guo, L. QuÃ©val (loic.queval@gmail.com) 
+%  MODIFICATIONS:
+%  2026, Zakaria Houta
+%  - Invert the matrix using Matlab's '\' operator, as the least squares method does not work very well given that the matrix is ill-conditioned
+%  COPYRIGHT: 2020, LoÃ¯c QuÃ©val, BSD License (http://opensource.org/licenses/BSD-3-Clause)
 %
 %  USE:
 %    fct_get_XX_lin(h_min,h_max,P,r_l,mu_l,K_lh_s,K_lh_c)
@@ -68,10 +71,11 @@ for h=h_min:1:h_max
         BB(i+6) = K_lh_c(l,h)*r_l(l)/h/P;
     end
     
-    % Invert system
-    XX = lsqlin(RR,BB);
+    % Simple inversion
+    XX = RR\BB;
+
     
-    % get coeff from AA
+    % get coeff from XX
     for l = 1:N
         i = 4*(l-1);
         a_lh(l,h)= XX(i+1);
@@ -79,4 +83,5 @@ for h=h_min:1:h_max
         c_lh(l,h)= XX(i+3);
         d_lh(l,h)= XX(i+4);
     end
+
 end

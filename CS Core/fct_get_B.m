@@ -4,6 +4,9 @@ function [RHO,THETA,BR,BTH,NORMB] = fct_get_B(a_lh,b_lh,c_lh,d_lh,h_min,h_max,P,
 %  WHAT:      Calculates B at field points.
 %  REQUIRED:  CSmodel toolbox 20200321
 %  AUTHORS:   20200321, J. Guo, L. Quéval (loic.queval@gmail.com)
+%  MODIFICATIONS:
+%  2026, Zakaria Houta
+%  - Vectorisation instead of using lots of loops.
 %  COPYRIGHT: 2020, Loïc Quéval, BSD License (http://opensource.org/licenses/BSD-3-Clause)
 %
 %  USE:
@@ -24,22 +27,64 @@ function [RHO,THETA,BR,BTH,NORMB] = fct_get_B(a_lh,b_lh,c_lh,d_lh,h_min,h_max,P,
 %    BTH        = Field points B theta-component vector or matrix
 %    NORMB      = Field points B norm vector or matrix
 %---------------------------------------------------
-            
-% initialize (BR, BTH)
-BR = zeros(size(RHO,1),size(RHO,2));
-BTH = zeros(size(RHO,1),size(RHO,2));
-
-for h=h_min:1:h_max %loop on harmonic number h
-    for m=1:size(RHO,1) %loop on field points
-        for q=1:size(RHO,2)
-            rho_loop = RHO(m,q);
-            theta_loop = THETA(m,q);
-            sector = sum(rho_loop>r_l)+1; %find the sector number for a given radius
-            
-                BR(m,q) = (a_lh(sector,h)*rho_loop^(h*P-1) + b_lh(sector,h)*rho_loop^(-h*P-1))*h*P*cos(h*P*theta_loop) - (c_lh(sector,h)*rho_loop^(h*P-1) + d_lh(sector,h)*rho_loop^(-h*P-1))*h*P*sin(h*P*theta_loop)+BR(m,q);
-                BTH(m,q) =(-a_lh(sector,h)*rho_loop^(h*P-1) + b_lh(sector,h)*rho_loop^(-h*P-1))*h*P*sin(h*P*theta_loop) + (-c_lh(sector,h)*rho_loop^(h*P-1) + d_lh(sector,h)*rho_loop^(-h*P-1))*h*P*cos(h*P*theta_loop)+BTH(m,q);
-            
-        end
+    % Get dimensions
+    [M, Q] = size(RHO);
+    
+    % Convert RHO and THETA into column vectors for processing
+    rho_vec = RHO(:);
+    theta_vec = THETA(:);
+    
+    % Initialize BR et BTH
+    BR = zeros(M,Q);
+    BTH = zeros(M,Q);
+    
+    % Determine the sectors for all points at once
+    sectors = zeros(size(rho_vec));
+    for i = 1:length(r_l)
+        sectors = sectors + (rho_vec > r_l(i));
     end
-end
-NORMB = sqrt(BR.^2+BTH.^2);
+    sectors = sectors + 1;
+    
+    % For each harmonic
+    for h_idx = h_min:1:h_max    
+        hP = h_idx * P;
+    
+        % Calculate the powers of rho for all points
+        rho_pow_pos = rho_vec.^(hP - 1);
+        rho_pow_neg = rho_vec.^(-hP - 1);
+    
+        % Calculate trigonometric functions
+        hP_theta = hP * theta_vec;
+        cos_hP_theta = cos(hP_theta);
+        sin_hP_theta = sin(hP_theta);
+    
+        % Extract the coefficients for this harmonic and the corresponding sectors
+        % Note: a_lh, b_lh, c_lh, d_lh are of size [number_of_sectors × number_of_harmonics]
+        a_vals = a_lh(sectors, h_idx);
+        b_vals = b_lh(sectors, h_idx);
+        c_vals = c_lh(sectors, h_idx);
+        d_vals = d_lh(sectors, h_idx);
+    
+        % Calculate the terms in the expression for magnetic flux density for BR and BTH
+        term1_br = (a_vals .* rho_pow_pos + b_vals .* rho_pow_neg) * hP;
+        term2_br = (c_vals .* rho_pow_pos + d_vals .* rho_pow_neg) * hP;
+    
+        term1_bth = (-a_vals .* rho_pow_pos + b_vals .* rho_pow_neg) * hP;
+        term2_bth = (-c_vals .* rho_pow_pos + d_vals .* rho_pow_neg) * hP;
+    
+        % Calculate the contributions for this harmonic
+        br_contrib = term1_br .* cos_hP_theta - term2_br .* sin_hP_theta;
+        bth_contrib = term1_bth .* sin_hP_theta + term2_bth .* cos_hP_theta;
+    
+        % Add the contributions (restoring them to their original form)
+        BR = BR + reshape(br_contrib, M, Q);
+        BTH = BTH + reshape(bth_contrib, M, Q);
+    end
+    
+    NORMB = sqrt(BR.^2+BTH.^2);
+
+
+
+
+
+
